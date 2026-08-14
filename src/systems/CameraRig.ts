@@ -1,11 +1,10 @@
 import Phaser from 'phaser';
+import { WORLD_EDGE_PAD } from '../config';
 import type { TrackBuild } from '../types';
 
 /**
- * Scrolls the playfield to keep the current race leader roughly centered,
- * the way the original scrolled toward whoever was in front rather than
- * locking onto the human player. Smoothing is time-based so it feels the
- * same regardless of frame rate.
+ * Scrolls the playfield to keep the player's car centered. Smoothing is
+ * time-based so it feels the same regardless of frame rate.
  */
 export class CameraRig {
   private camera: Phaser.Cameras.Scene2D.Camera;
@@ -14,7 +13,7 @@ export class CameraRig {
 
   constructor(scene: Phaser.Scene, build: TrackBuild, startX: number, startY: number) {
     this.camera = scene.cameras.main;
-    const pad = 400;
+    const pad = WORLD_EDGE_PAD;
     this.camera.setBounds(
       build.bounds.minX - pad,
       build.bounds.minY - pad,

@@ -13,10 +13,19 @@ export const FUEL_THROTTLE_DRAIN_PER_SEC = 1.15;
 
 export const TRACK_STEP = 24; // arc-length spacing between generated waypoints (world px)
 
+// How far beyond the track's bounding box the camera is allowed to scroll,
+// and how far the ground tile/scenery layer must extend to cover it. These
+// must stay in sync — if the camera can scroll further than the ground is
+// drawn, driving off-road reveals unrendered black canvas.
+export const WORLD_EDGE_PAD = 420;
+
 export const STORAGE_KEY = 'retro-hot-rod-save-v1';
 
 export const CATCHUP_MARGIN = 26; // extra world px beyond half-viewport before a car is caught up
 export const CATCHUP_RESPAWN_BEHIND = 70; // world px behind leader a caught-up car reappears
+
+export const PLAYER_BEHIND_DISTANCE = 340; // world px behind the leader before the player starts losing fuel for lagging
+export const PLAYER_BEHIND_DRAIN_PER_SEC = 5; // extra fuel drain per second while lagging that far behind
 
 export const AI_COUNT = 3;
 

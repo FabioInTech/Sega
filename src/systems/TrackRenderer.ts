@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { WORLD_EDGE_PAD } from '../config';
 import type { TrackBuild } from '../types';
 import { generateAllSceneryTextures, generateFuelPickupTexture, generateGroundTileTexture, sceneryTextureSize, themeRoadColor } from './TextureFactory';
 
@@ -36,7 +37,7 @@ export function renderTrack(scene: Phaser.Scene, build: TrackBuild): TrackVisual
   generateFuelPickupTexture(scene);
 
   const { minX, minY, maxX, maxY } = build.bounds;
-  const padding = 260;
+  const padding = WORLD_EDGE_PAD;
   const groundW = maxX - minX + padding * 2;
   const groundH = maxY - minY + padding * 2;
   const ground = scene.add.tileSprite(minX - padding, minY - padding, groundW, groundH, `ground_${theme}`);
