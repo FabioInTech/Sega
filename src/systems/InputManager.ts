@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import type { DriveInput } from '../vehicles/Vehicle';
-import { touchInput } from './TouchControls';
 
 /**
  * Unifies keyboard (arrows / WASD) and gamepad (left stick + triggers/face
@@ -39,10 +38,10 @@ export class InputManager {
     let throttle = 0;
     let brake = 0;
 
-    if (this.cursors.left.isDown || this.keys.a.isDown || touchInput.left) steer -= 1;
-    if (this.cursors.right.isDown || this.keys.d.isDown || touchInput.right) steer += 1;
-    if (this.cursors.up.isDown || this.keys.w.isDown || touchInput.throttle) throttle = 1;
-    if (this.cursors.down.isDown || this.keys.s.isDown || touchInput.brake) brake = 1;
+    if (this.cursors.left.isDown || this.keys.a.isDown) steer -= 1;
+    if (this.cursors.right.isDown || this.keys.d.isDown) steer += 1;
+    if (this.cursors.up.isDown || this.keys.w.isDown) throttle = 1;
+    if (this.cursors.down.isDown || this.keys.s.isDown) brake = 1;
 
     const pad = this.pad();
     if (pad) {
@@ -61,7 +60,7 @@ export class InputManager {
 
   update(): void {
     const padConfirm = this.pad()?.buttons[0]?.pressed ?? false;
-    const confirm = this.keys.space.isDown || padConfirm || touchInput.confirm;
+    const confirm = this.keys.space.isDown || padConfirm;
     this.confirmJustPressed = confirm && !this.prevConfirm;
     this.prevConfirm = confirm;
   }

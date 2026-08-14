@@ -6,9 +6,6 @@ import { MenuScene } from './scenes/MenuScene';
 import { RaceScene } from './scenes/RaceScene';
 import { ResultsScene } from './scenes/ResultsScene';
 import { ShopScene } from './scenes/ShopScene';
-import { initTouchControls } from './systems/TouchControls';
-
-initTouchControls();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
