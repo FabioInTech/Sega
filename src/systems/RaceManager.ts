@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
-import { CATCHUP_MARGIN, CATCHUP_RESPAWN_BEHIND, FUEL_CATCHUP_PENALTY, FUEL_PICKUP_AMOUNT } from '../config';
+import {
+  CATCHUP_MARGIN,
+  CATCHUP_RESPAWN_BEHIND,
+  FUEL_PICKUP_AMOUNT,
+  PLAYER_BEHIND_DISTANCE,
+  PLAYER_BEHIND_DRAIN_PER_SEC
+} from '../config';
 import { AICar } from '../vehicles/AICar';
 import { PlayerCar } from '../vehicles/PlayerCar';
 import { Vehicle } from '../vehicles/Vehicle';
@@ -101,10 +107,10 @@ export class RaceManager extends Phaser.Events.EventEmitter {
     ranked.forEach((v, i) => (v.rank = i + 1));
 
     const leader = ranked[0];
-    this.cameraRig.update(leader.x, leader.y, dt);
+    this.cameraRig.update(this.playerVehicle.x, this.playerVehicle.y, dt);
 
-    this.handleCatchup(leader, vehicles);
-    this.handleFuel(dt);
+    this.handleCatchup(vehicles);
+    this.handleFuel(dt, leader);
     if (this.outOfFuel) return; // running out of gas ends the run outright — skip finish checks this frame
     this.handlePickups();
     this.handleFinish(vehicles);
@@ -118,7 +124,10 @@ export class RaceManager extends Phaser.Events.EventEmitter {
     return 1.0;
   }
 
-  private handleCatchup(leader: Vehicle, vehicles: Vehicle[]): void {
+  // Repositions AI cars that have fallen off the (player-centered) screen so
+  // the pack stays visible and competitive. The player is never teleported —
+  // the camera always follows them, so they can never go offscreen this way.
+  private handleCatchup(vehicles: Vehicle[]): void {
     const view = this.cameraRig.getWorldView();
     const minX = view.x - CATCHUP_MARGIN;
     const maxX = view.x + view.width + CATCHUP_MARGIN;
@@ -126,31 +135,26 @@ export class RaceManager extends Phaser.Events.EventEmitter {
     const maxY = view.y + view.height + CATCHUP_MARGIN;
 
     for (const v of vehicles) {
-      if (v === leader || v.finished) continue;
+      if (v === this.playerVehicle || v.finished) continue;
       const offscreen = v.x < minX || v.x > maxX || v.y < minY || v.y > maxY;
       if (!offscreen) continue;
 
-      const targetDistance = Math.max(0, leader.progressDistance - CATCHUP_RESPAWN_BEHIND);
+      const targetDistance = Math.max(0, this.playerVehicle.progressDistance - CATCHUP_RESPAWN_BEHIND);
       const sample = this.path.sampleAtDistance(targetDistance);
       v.teleportTo(sample.x, sample.y, sample.angle, v.stats.maxSpeed * 0.55);
       const proj = this.path.project(v.x, v.y, v.pathIndex);
       v.pathIndex = proj.index;
       v.progressDistance = proj.distance;
-
-      if (v === this.playerVehicle) {
-        this.fuel.penalize(FUEL_CATCHUP_PENALTY);
-        this.emit('catchup');
-      }
     }
   }
 
-  private handleFuel(dt: number): void {
+  private handleFuel(dt: number, leader: Vehicle): void {
     if (!this.fuel.empty) {
-      this.fuel.tick(dt, this.playerVehicle.lastInput.throttle);
+      const gap = leader.progressDistance - this.playerVehicle.progressDistance;
+      const laggingBehind = gap > PLAYER_BEHIND_DISTANCE;
+      this.fuel.tick(dt, this.playerVehicle.lastInput.throttle, laggingBehind ? PLAYER_BEHIND_DRAIN_PER_SEC : 0);
+      if (laggingBehind) this.emit('catchup');
     }
-    // Fuel can also hit zero via a catch-up penalty (handled earlier this same
-    // frame) rather than the tick above — check the flag regardless of source
-    // so that path still ends the race instead of leaving it stuck at 0 fuel.
     if (this.fuel.empty && !this.outOfFuel) {
       this.outOfFuel = true;
       this.raceOver = true;

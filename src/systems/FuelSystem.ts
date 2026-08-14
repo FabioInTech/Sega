@@ -4,9 +4,9 @@ export class FuelSystem {
   fuel: number = FUEL_MAX;
   empty = false;
 
-  tick(dt: number, throttle: number): void {
+  tick(dt: number, throttle: number, extraDrainPerSec = 0): void {
     if (this.empty) return;
-    const drain = FUEL_BASE_DRAIN_PER_SEC + FUEL_THROTTLE_DRAIN_PER_SEC * throttle;
+    const drain = FUEL_BASE_DRAIN_PER_SEC + FUEL_THROTTLE_DRAIN_PER_SEC * throttle + extraDrainPerSec;
     this.fuel = Math.max(0, this.fuel - drain * dt);
     if (this.fuel <= 0) this.empty = true;
   }
