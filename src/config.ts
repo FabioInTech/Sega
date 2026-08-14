@@ -1,6 +1,13 @@
-// Internal render resolution — nearest-neighbor scaled up by Phaser's Scale Manager.
+// Internal render resolution — smooth/filtered scaled up by Phaser's Scale Manager.
 export const VIEW_WIDTH = 384;
 export const VIEW_HEIGHT = 288;
+
+// All procedurally-drawn sprite textures (cars, scenery, ground) are rendered
+// at this many times their world-space footprint, then displayed at the
+// original size via a matching sprite scale-down. This gives crisp, smooth,
+// high-detail art at any screen size without changing any world-space
+// gameplay/physics units (car size, collision radii, track geometry, etc.).
+export const TEXTURE_SUPERSAMPLE = 3;
 
 export const CAR_WIDTH = 11;
 export const CAR_HEIGHT = 19;
