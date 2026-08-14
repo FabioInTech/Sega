@@ -6,7 +6,12 @@
 export class AudioSystem {
   private ctx: AudioContext | null = null;
   private engineOsc: OscillatorNode | null = null;
+  private engineSubOsc: OscillatorNode | null = null;
+  private engineNoise: AudioBufferSourceNode | null = null;
   private engineGain: GainNode | null = null;
+  private engineSubGain: GainNode | null = null;
+  private engineNoiseGain: GainNode | null = null;
+  private engineFilter: BiquadFilterNode | null = null;
   private masterGain: GainNode | null = null;
   muted = false;
 
@@ -17,8 +22,21 @@ export class AudioSystem {
     this.ctx = new Ctor();
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = 0.35;
-    this.masterGain.connect(this.ctx.destination);
+    const compressor = this.ctx.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 12;
+    compressor.ratio.value = 4;
+    this.masterGain.connect(compressor);
+    compressor.connect(this.ctx.destination);
     return this.ctx;
+  }
+
+  private makeLoopedNoiseBuffer(ctx: AudioContext): AudioBuffer {
+    const length = Math.floor(ctx.sampleRate * 2);
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+    return buffer;
   }
 
   /** Must be called from a user gesture (keydown/click) to satisfy autoplay policies. */
@@ -38,7 +56,13 @@ export class AudioSystem {
     if (glideTo) osc.frequency.linearRampToValueAtTime(glideTo, ctx.currentTime + duration);
     gain.gain.setValueAtTime(gainValue, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-    osc.connect(gain);
+    // Softens the raw harmonic edge off square/sawtooth waves so short SFX
+    // read as a musical blip rather than a harsh buzz.
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = Math.max(freq * 4, 1200);
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(this.masterGain);
     osc.start();
     osc.stop(ctx.currentTime + duration);
@@ -99,24 +123,68 @@ export class AudioSystem {
     this.tone(220, 0.5, 'sawtooth', 0.25, 60);
   }
 
+  /**
+   * The engine is three layered sources rather than one bare oscillator:
+   * a sawtooth fundamental through a lowpass filter that opens up with RPM
+   * (the classic synthesized-engine trick — brighter/rougher at high revs),
+   * a sub-oscillator an octave down for body/weight, and a touch of filtered
+   * noise for mechanical grit. Layering + the filter sweep is what keeps it
+   * from sounding like a flat 8-bit beep.
+   */
   startEngine(): void {
     const ctx = this.ensureContext();
     if (!ctx || !this.masterGain || this.engineOsc) return;
+
+    this.engineFilter = ctx.createBiquadFilter();
+    this.engineFilter.type = 'lowpass';
+    this.engineFilter.frequency.value = 400;
+    this.engineFilter.Q.value = 1.2;
+
     this.engineOsc = ctx.createOscillator();
     this.engineOsc.type = 'sawtooth';
     this.engineGain = ctx.createGain();
     this.engineGain.gain.value = 0.0001;
     this.engineOsc.connect(this.engineGain);
-    this.engineGain.connect(this.masterGain);
+    this.engineGain.connect(this.engineFilter);
     this.engineOsc.start();
+
+    this.engineSubOsc = ctx.createOscillator();
+    this.engineSubOsc.type = 'triangle';
+    this.engineSubGain = ctx.createGain();
+    this.engineSubGain.gain.value = 0.0001;
+    this.engineSubOsc.connect(this.engineSubGain);
+    this.engineSubGain.connect(this.engineFilter);
+    this.engineSubOsc.start();
+
+    this.engineNoise = ctx.createBufferSource();
+    this.engineNoise.buffer = this.makeLoopedNoiseBuffer(ctx);
+    this.engineNoise.loop = true;
+    this.engineNoiseGain = ctx.createGain();
+    this.engineNoiseGain.gain.value = 0.0001;
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.value = 900;
+    noiseFilter.Q.value = 0.6;
+    this.engineNoise.connect(noiseFilter);
+    noiseFilter.connect(this.engineNoiseGain);
+    this.engineNoiseGain.connect(this.engineFilter);
+    this.engineNoise.start();
+
+    this.engineFilter.connect(this.masterGain);
   }
 
   updateEngine(speedRatio: number, throttle: number): void {
-    if (!this.engineOsc || !this.engineGain || !this.ctx) return;
-    const freq = 70 + speedRatio * 180 + throttle * 30;
-    this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.05);
-    const targetGain = this.muted ? 0.0001 : 0.05 + speedRatio * 0.05;
-    this.engineGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.08);
+    if (!this.engineOsc || !this.engineSubOsc || !this.engineGain || !this.engineSubGain || !this.engineNoiseGain || !this.engineFilter || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    const freq = 65 + speedRatio * 170 + throttle * 35;
+    this.engineOsc.frequency.setTargetAtTime(freq, t, 0.05);
+    this.engineSubOsc.frequency.setTargetAtTime(freq / 2, t, 0.05);
+    this.engineFilter.frequency.setTargetAtTime(500 + speedRatio * 2200 + throttle * 500, t, 0.06);
+
+    const muted = this.muted;
+    this.engineGain.gain.setTargetAtTime(muted ? 0.0001 : 0.05 + speedRatio * 0.06, t, 0.08);
+    this.engineSubGain.gain.setTargetAtTime(muted ? 0.0001 : 0.035 + speedRatio * 0.02, t, 0.08);
+    this.engineNoiseGain.gain.setTargetAtTime(muted ? 0.0001 : 0.012 + throttle * 0.02, t, 0.1);
   }
 
   stopEngine(): void {
@@ -125,9 +193,31 @@ export class AudioSystem {
       this.engineOsc.disconnect();
       this.engineOsc = null;
     }
+    if (this.engineSubOsc) {
+      this.engineSubOsc.stop();
+      this.engineSubOsc.disconnect();
+      this.engineSubOsc = null;
+    }
+    if (this.engineNoise) {
+      this.engineNoise.stop();
+      this.engineNoise.disconnect();
+      this.engineNoise = null;
+    }
     if (this.engineGain) {
       this.engineGain.disconnect();
       this.engineGain = null;
+    }
+    if (this.engineSubGain) {
+      this.engineSubGain.disconnect();
+      this.engineSubGain = null;
+    }
+    if (this.engineNoiseGain) {
+      this.engineNoiseGain.disconnect();
+      this.engineNoiseGain = null;
+    }
+    if (this.engineFilter) {
+      this.engineFilter.disconnect();
+      this.engineFilter = null;
     }
   }
 

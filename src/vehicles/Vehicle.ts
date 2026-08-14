@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applySuperscale } from '../systems/TextureFactory';
 import type { VehicleStats } from '../types';
 
 export interface DriveInput {
@@ -47,6 +48,7 @@ export class Vehicle {
     this.velocity = new Phaser.Math.Vector2(0, 0);
     this.stats = stats;
     this.sprite = scene.add.sprite(x, y, textureKey);
+    applySuperscale(this.sprite);
     this.sprite.setRotation(angle);
     this.sprite.setDepth(10);
   }

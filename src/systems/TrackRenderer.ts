@@ -1,7 +1,14 @@
 import Phaser from 'phaser';
-import { WORLD_EDGE_PAD } from '../config';
+import { TEXTURE_SUPERSAMPLE, WORLD_EDGE_PAD } from '../config';
 import type { TrackBuild } from '../types';
-import { generateAllSceneryTextures, generateFuelPickupTexture, generateGroundTileTexture, sceneryTextureSize, themeRoadColor } from './TextureFactory';
+import {
+  applySuperscale,
+  generateAllSceneryTextures,
+  generateFuelPickupTexture,
+  generateGroundTileTexture,
+  sceneryTextureSize,
+  themeRoadColor
+} from './TextureFactory';
 
 const EDGE_COLORS: Record<string, [number, number]> = {
   city: [0xf2f2f2, 0xd6432f],
@@ -43,6 +50,7 @@ export function renderTrack(scene: Phaser.Scene, build: TrackBuild): TrackVisual
   const ground = scene.add.tileSprite(minX - padding, minY - padding, groundW, groundH, `ground_${theme}`);
   ground.setOrigin(0, 0);
   ground.setDepth(0);
+  ground.setTileScale(1 / TEXTURE_SUPERSAMPLE, 1 / TEXTURE_SUPERSAMPLE);
 
   const roadColor = themeRoadColor(theme);
   const [edgeColor, edgeColor2] = EDGE_COLORS[theme] ?? [0xffffff, 0xffffff];
@@ -97,6 +105,7 @@ export function renderTrack(scene: Phaser.Scene, build: TrackBuild): TrackVisual
     const x = s.x + rx * h.offset;
     const y = s.y + ry * h.offset;
     const sprite = scene.add.sprite(x, y, `scenery_${h.type}`);
+    applySuperscale(sprite);
     sprite.setDepth(5);
     const size = sceneryTextureSize(h.type);
     hazards.push({ sprite, x, y, radius: Math.max(size.w, size.h) * 0.32 });
@@ -110,6 +119,7 @@ export function renderTrack(scene: Phaser.Scene, build: TrackBuild): TrackVisual
     const x = sample.x + rx * s.offset;
     const y = sample.y + ry * s.offset;
     const sprite = scene.add.sprite(x, y, `scenery_${s.type}`);
+    applySuperscale(sprite);
     sprite.setDepth(sceneryDepth);
   }
 
@@ -121,6 +131,7 @@ export function renderTrack(scene: Phaser.Scene, build: TrackBuild): TrackVisual
     const x = sample.x + rx * f.offset;
     const y = sample.y + ry * f.offset;
     const sprite = scene.add.sprite(x, y, 'fuelPickup');
+    applySuperscale(sprite);
     sprite.setDepth(6);
     scene.tweens.add({ targets: sprite, alpha: 0.35, duration: 420, yoyo: true, repeat: -1 });
     fuelPickups.push({ sprite, x, y, collected: false });

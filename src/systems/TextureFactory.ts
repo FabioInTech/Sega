@@ -1,4 +1,7 @@
 import Phaser from 'phaser';
+import { TEXTURE_SUPERSAMPLE } from '../config';
+
+const S = TEXTURE_SUPERSAMPLE;
 
 const THEME_GROUND: Record<string, number> = {
   city: 0x3a3f33,
@@ -24,80 +27,99 @@ export function themeRoadColor(theme: string): number {
   return THEME_ROAD[theme] ?? 0x4a4a4a;
 }
 
-function makeTexture(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: Phaser.GameObjects.Graphics) => void): void {
+/**
+ * Every texture below is drawn using nominal world-space coordinates, but
+ * rasterized into a texture TEXTURE_SUPERSAMPLE times bigger (via Graphics'
+ * own scale() transform stack, applied before any drawing happens). Callers
+ * scale the resulting sprite back down by 1/S with `applySuperscale`, so the
+ * on-screen/world footprint is unchanged — only the pixel detail increases.
+ */
+function makeTexture(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: Phaser.GameObjects.Graphics, w: number, h: number) => void): void {
   if (scene.textures.exists(key)) return;
   const g = scene.add.graphics();
-  draw(g);
-  g.generateTexture(key, w, h);
+  g.scaleCanvas(S, S);
+  draw(g, w, h);
+  g.generateTexture(key, w * S, h * S);
   g.destroy();
+}
+
+/** Scales a sprite/image built from a supersampled texture back to its nominal world-space size. */
+export function applySuperscale(obj: { setScale(x: number, y?: number): unknown }): void {
+  obj.setScale(1 / S);
 }
 
 export function generateCarTexture(scene: Phaser.Scene, key: string, bodyColor: number, accentColor: number): void {
   const w = 22;
   const h = 13;
-  makeTexture(scene, key, w, h, (g) => {
+  makeTexture(scene, key, w, h, (g, W, H) => {
     // shadow
     g.fillStyle(0x000000, 0.25);
-    g.fillEllipse(w / 2 + 1, h / 2 + 1, w - 3, h - 3);
+    g.fillEllipse(W / 2 + 1, H / 2 + 1, W - 3, H - 3);
 
     // body (nose points +X / right)
     g.fillStyle(bodyColor, 1);
-    g.fillRoundedRect(2, 1, w - 4, h - 2, 3);
+    g.fillRoundedRect(2, 1, W - 4, H - 2, 3);
+
+    // subtle body highlight for a less flat look
+    g.fillStyle(0xffffff, 0.12);
+    g.fillRoundedRect(2, 1, W - 4, (H - 2) * 0.4, 3);
 
     // accent stripe
     g.fillStyle(accentColor, 1);
-    g.fillRect(2, h / 2 - 1, w - 4, 2);
+    g.fillRect(2, H / 2 - 1, W - 4, 2);
 
     // windshield / cabin (slightly toward rear so nose reads clearly)
-    g.fillStyle(0x1c2430, 0.9);
-    g.fillRoundedRect(w * 0.42, 2.5, w * 0.28, h - 5, 1.5);
+    g.fillStyle(0x1c2430, 0.92);
+    g.fillRoundedRect(W * 0.42, 2.5, W * 0.28, H - 5, 1.5);
+    g.fillStyle(0x6fa8c9, 0.35);
+    g.fillRoundedRect(W * 0.44, 3, W * 0.1, H - 7, 1);
 
     // headlights
     g.fillStyle(0xfff6c8, 1);
-    g.fillRect(w - 4, 2, 2, 2);
-    g.fillRect(w - 4, h - 4, 2, 2);
+    g.fillRect(W - 4, 2, 2, 2);
+    g.fillRect(W - 4, H - 4, 2, 2);
 
     // taillights
     g.fillStyle(0xaa1f1f, 1);
     g.fillRect(1, 2, 2, 2);
-    g.fillRect(1, h - 4, 2, 2);
+    g.fillRect(1, H - 4, 2, 2);
 
     // outline
-    g.lineStyle(1, 0x14171c, 0.6);
-    g.strokeRoundedRect(2, 1, w - 4, h - 2, 3);
+    g.lineStyle(1, 0x14171c, 0.65);
+    g.strokeRoundedRect(2, 1, W - 4, H - 2, 3);
   });
 }
 
 export function generateGroundTileTexture(scene: Phaser.Scene, theme: string): void {
   const key = `ground_${theme}`;
   const base = themeGroundColor(theme);
-  makeTexture(scene, key, 32, 32, (g) => {
+  makeTexture(scene, key, 32, 32, (g, W, H) => {
     g.fillStyle(base, 1);
-    g.fillRect(0, 0, 32, 32);
+    g.fillRect(0, 0, W, H);
     const rng = mulberryLocal(hashString(theme));
     if (theme === 'countryside' || theme === 'highway') {
       g.fillStyle(shade(base, -0.08), 1);
       for (let i = 0; i < 26; i++) {
-        const x = rng() * 32;
-        const y = rng() * 32;
+        const x = rng() * W;
+        const y = rng() * H;
         g.fillRect(x, y, 1, 3);
       }
     } else if (theme === 'desert') {
       g.fillStyle(shade(base, -0.1), 1);
-      for (let i = 0; i < 18; i++) g.fillCircle(rng() * 32, rng() * 32, 1);
+      for (let i = 0; i < 18; i++) g.fillCircle(rng() * W, rng() * H, 1);
       g.fillStyle(shade(base, 0.12), 1);
-      for (let i = 0; i < 10; i++) g.fillCircle(rng() * 32, rng() * 32, 1);
+      for (let i = 0; i < 10; i++) g.fillCircle(rng() * W, rng() * H, 1);
     } else if (theme === 'snow') {
       g.fillStyle(shade(base, -0.05), 1);
-      for (let i = 0; i < 14; i++) g.fillCircle(rng() * 32, rng() * 32, 1);
+      for (let i = 0; i < 14; i++) g.fillCircle(rng() * W, rng() * H, 1);
       g.fillStyle(0xffffff, 0.9);
-      for (let i = 0; i < 10; i++) g.fillCircle(rng() * 32, rng() * 32, 0.8);
+      for (let i = 0; i < 10; i++) g.fillCircle(rng() * W, rng() * H, 0.8);
     } else {
       // city: subtle pavement seams
       g.lineStyle(1, shade(base, -0.15), 0.6);
-      g.strokeRect(0, 0, 32, 32);
+      g.strokeRect(0, 0, W, H);
       g.fillStyle(shade(base, -0.1), 1);
-      for (let i = 0; i < 8; i++) g.fillRect(rng() * 32, rng() * 32, 2, 2);
+      for (let i = 0; i < 8; i++) g.fillRect(rng() * W, rng() * H, 2, 2);
     }
   });
 }
@@ -128,28 +150,32 @@ function shade(color: number, amount: number): number {
 }
 
 export function generateFuelPickupTexture(scene: Phaser.Scene): void {
-  makeTexture(scene, 'fuelPickup', 16, 16, (g) => {
+  makeTexture(scene, 'fuelPickup', 16, 16, (g, W, H) => {
+    g.fillStyle(0x000000, 0.25);
+    g.fillEllipse(W / 2, H - 2, W - 4, 3);
     g.fillStyle(0x1c2430, 1);
-    g.fillRoundedRect(2, 2, 12, 12, 2);
+    g.fillRoundedRect(2, 2, W - 4, H - 4, 2);
     g.fillStyle(0xffd23f, 1);
-    g.fillRoundedRect(3, 3, 10, 10, 2);
+    g.fillRoundedRect(3, 3, W - 6, H - 6, 2);
+    g.fillStyle(0xffffff, 0.3);
+    g.fillRoundedRect(3, 3, (W - 6) * 0.4, H - 6, 2);
     g.fillStyle(0x1c2430, 1);
-    g.fillRect(6, 5, 4, 6);
+    g.fillRect(W * 0.375, H * 0.31, W * 0.25, H * 0.38);
   });
 }
 
 export function generateParticleTextures(scene: Phaser.Scene): void {
-  makeTexture(scene, 'sparkParticle', 6, 6, (g) => {
+  makeTexture(scene, 'sparkParticle', 6, 6, (g, W, H) => {
     g.fillStyle(0xfff2b0, 1);
-    g.fillCircle(3, 3, 3);
+    g.fillCircle(W / 2, H / 2, W / 2);
   });
-  makeTexture(scene, 'smokeParticle', 8, 8, (g) => {
+  makeTexture(scene, 'smokeParticle', 8, 8, (g, W, H) => {
     g.fillStyle(0xcccccc, 0.55);
-    g.fillCircle(4, 4, 4);
+    g.fillCircle(W / 2, H / 2, W / 2);
   });
-  makeTexture(scene, 'skidParticle', 6, 3, (g) => {
+  makeTexture(scene, 'skidParticle', 6, 3, (g, W, H) => {
     g.fillStyle(0x000000, 0.35);
-    g.fillRect(0, 0, 6, 3);
+    g.fillRect(0, 0, W, H);
   });
 }
 
